@@ -8,7 +8,21 @@ what broke. It is not mid-frequency alpha research; that work is in the `quant-r
 progress. Where a result rests on synthetic data the page says so, and no result here should be read
 as a return claim. The production code is Lucidly-owned and is not included.
 
-Open `pages/index.html` for the overview, or any `strategies/<name>/index.html`.
+## Where the logic is
+
+| file | what it holds |
+|---|---|
+| [`strategies/dn_cluster/strategy.py`](strategies/dn_cluster/strategy.py) | delta-neutral allocation, leg sizing, close rules (`should_close`) |
+| [`strategies/leverage_loop/strategy.py`](strategies/leverage_loop/strategy.py) | loop scoring, caps, net-APY gate and markdown guard state machines (`next_net_state`, `next_markdown_state`) |
+| [`strategies/coin_carry_vault/strategy.py`](strategies/coin_carry_vault/strategy.py) | carry LTV ladder (`decide`) and delever routing |
+| [`strategies/lending_cluster/strategy.py`](strategies/lending_cluster/strategy.py) | lending allocator: entry/exit gates, capacity, utilisation impact |
+| [`strategies/hedged_btc_mm/strategy.py`](strategies/hedged_btc_mm/strategy.py) | hedge sizing (`optimise_hedge`) and rebalance trigger |
+| [`common/cl_engine.py`](common/cl_engine.py) · [`clmm.py`](common/clmm.py) · [`metrics.py`](common/metrics.py) | shared concentrated-liquidity simulator, v3 tick math, performance metrics |
+| `strategies/<name>/backtest.py` | the replays that drive each strategy over real or synthetic data |
+| [`tests/`](tests) | 28 pytest cases for the math and the state machines |
+
+The HTML pages are generated output (each inlines its results data so it opens offline): `pages/index.html`
+for the overview, or any `strategies/<name>/index.html`.
 
 | strategy | venue | data | module |
 |---|---|---|---|
