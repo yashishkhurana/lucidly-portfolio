@@ -1,9 +1,9 @@
 {
- "title": "USDC Lending Cluster \u2014 Morpho Blue supply + junior tranches",
- "subtitle": "Mean-variance allocator with risk haircuts, eligibility gates, planner and withdrawal reserve \u00b7 mainnet \u00b7 plus the apyUSD postmortem",
+ "title": "USDC Lending Cluster \u2014 Morpho Blue supply",
+ "subtitle": "Mean-variance allocator with risk haircuts, eligibility gates, planner and withdrawal reserve \u00b7 22 Mar \u2013 22 Jun 2026",
  "scenarios": {
   "prod": {
-   "label": "Production caps",
+   "label": "Base caps",
    "note": "per-tick deploy caps $100k/$100k/$50k, 3-day APY window, 1% drift gate",
    "verdict": "+0.48% over 93 days (+1.88% annualised, simple), max DD 0.00%, 30 supply/withdraw actions",
    "verdict_tone": "neutral",
@@ -1225,7 +1225,7 @@
    ],
    "notes": [
     "Supply-side strategy: the loss path is bad debt / oracle failure, not price; the gates (utilisation cap, oracle staleness, hurdle hysteresis, concentration) are the whole risk model.",
-    "Roughly half the book sat idle at 0% for the whole window: with three markets whose window-mean APY hovers around the 3\u20134% hurdles and hard 0.40 weight caps, the hurdle hysteresis and caps bind, not the per-tick deploy caps (the 10\u00d7 scenario moves deployment by ~1 point). In production the fallback market (cbBTC/USDC) absorbed the remainder; here there is none, so the idle drag is shown rather than hidden.",
+    "Roughly half the book sat idle at 0% for the whole window: with three markets whose window-mean APY hovers around the 3\u20134% hurdles and hard 0.40 weight caps, the hurdle hysteresis and caps bind, not the per-tick deploy caps (the 10\u00d7 scenario moves deployment by ~1 point). In the full design a fallback market (cbBTC/USDC) absorbs the remainder; here there is none, so the idle drag is shown rather than hidden.",
     "The quadratic term is inert at this window length: with a 4-sample APY window the covariance is ~1e-5 and \u03bb = 1, so the penalty is ~1e-6 against a linear term of ~0.05 and SLSQP returns the greedy fill under caps. The same was true of the 6 h production window. The risk control is the haircut, the caps and the gates \u2014 the solver is there for the day a longer window is used."
    ]
   },
@@ -2452,61 +2452,8 @@
    ],
    "notes": [
     "Supply-side strategy: the loss path is bad debt / oracle failure, not price; the gates (utilisation cap, oracle staleness, hurdle hysteresis, concentration) are the whole risk model.",
-    "Roughly half the book sat idle at 0% for the whole window: with three markets whose window-mean APY hovers around the 3\u20134% hurdles and hard 0.40 weight caps, the hurdle hysteresis and caps bind, not the per-tick deploy caps (the 10\u00d7 scenario moves deployment by ~1 point). In production the fallback market (cbBTC/USDC) absorbed the remainder; here there is none, so the idle drag is shown rather than hidden.",
+    "Roughly half the book sat idle at 0% for the whole window: with three markets whose window-mean APY hovers around the 3\u20134% hurdles and hard 0.40 weight caps, the hurdle hysteresis and caps bind, not the per-tick deploy caps (the 10\u00d7 scenario moves deployment by ~1 point). In the full design a fallback market (cbBTC/USDC) absorbs the remainder; here there is none, so the idle drag is shown rather than hidden.",
     "The quadratic term is inert at this window length: with a 4-sample APY window the covariance is ~1e-5 and \u03bb = 1, so the penalty is ~1e-6 against a linear term of ~0.05 and SLSQP returns the greedy fill under caps. The same was true of the 6 h production window. The risk control is the haircut, the caps and the gates \u2014 the solver is there for the day a longer window is used."
-   ]
-  },
-  "junior": {
-   "label": "Junior-tranche variant \u00b7 depeg stress",
-   "note": "Royco Dawn junior tranches (syrupUSDC, apyUSD, sNUSD, stcUSD) \u2014 score = APY / risk, 24h async redemptions",
-   "verdict": "June 2026 postmortem: ~25.6k USDC in the apyUSD junior tranche lost 8,733 USDC (\u221234.1%) when apxUSD depegged to $0.84 \u2014 ~4\u00d7 leverage on an 8.5% depeg, ~$3.3k of it timing",
-   "verdict_tone": "bad",
-   "tiles": [
-    {
-     "label": "Position",
-     "value": "$25,596",
-     "sub": "18,600 apyUSD \u2192 25,078 JT shares, 2026-05-26/30",
-     "tone": "neutral"
-    },
-    {
-     "label": "Realised loss",
-     "value": "\u2212$8,733",
-     "sub": "\u221234.1% in USDC terms",
-     "tone": "bad"
-    },
-    {
-     "label": "Underlying depeg",
-     "value": "\u221216%",
-     "sub": "apxUSD $1.00 \u2192 $0.84 trough on 2026-06-18",
-     "tone": "neutral"
-    },
-    {
-     "label": "Junior leverage",
-     "value": "~4\u00d7",
-     "sub": "junior absorbs the senior's share of the drawdown",
-     "tone": "neutral"
-    },
-    {
-     "label": "Timing cost",
-     "value": "~$3.3k",
-     "sub": "redeemed during FIXED_TERM at the trough; 4 days later \u2212$5.4k instead of \u2212$10.1k",
-     "tone": "neutral"
-    },
-    {
-     "label": "What held",
-     "value": "cap \u226425%",
-     "sub": "concentration cap bounded exposure; coverage gate cancelled the over-ask no-penalty",
-     "tone": "neutral"
-    }
-   ],
-   "tables": [
-    {
-     "title": "Junior-tranche loss vs underlying depeg (first-loss arithmetic)",
-     "md": "| apxUSD depeg | junior share 25% | junior share 33% | junior share 50% |\n|---|---|---|---|\n| 2.0% | -8.00% | -6.06% | -4.00% |\n| 5.0% | -20.00% | -15.15% | -10.00% |\n| 8.5% | -34.00% | -25.76% | -17.00% |\n| 16.0% | -64.00% | -48.48% | -32.00% |\n| 25.0% | -100.00% | -75.76% | -50.00% |\n\n`loss_jr = min(1, depeg / junior_share)` \u2014 the tranche's protection of the senior is leverage on the junior."
-    }
-   ],
-   "notes": [
-    "Guardrails I wrote up from this: price the junior tranche's depeg leverage into the risk score (not just the APY), never redeem into a FIXED_TERM trough when the term clears the coverage loss, persist request intent before broadcast (the orphaned-request incidents of 06-07/08), and cross-check TVL adapters against `convertToAssets` (a +37% double-count was live for days)."
    ]
   }
  },
@@ -2514,15 +2461,15 @@
  "sections": [
   {
    "heading": "What this is",
-   "body_md": "Two supply-side USDC clusters I designed and operated on mainnet: (1) a Morpho Blue lending cluster that spreads a vault's idle USDC across curated markets with a mean-variance allocator, hard eligibility gates and a planner that turns weight deltas into supply/withdraw calls through the merkle-verified vault manager; (2) a junior-tranche cluster on Royco Dawn markets with 24-hour asynchronous redemptions, a wrap \u2192 finalize \u2192 execute deposit pipeline and a repair pipeline for orphaned on-chain requests.\n\n```\nsupply_apy = borrow_apr \u00d7 utilisation \u00d7 (1 \u2212 fee)\nmax  mu_adj'w \u2212 (\u03bb/2) w'\u03a3w     mu_adj = mu \u2212 50 bps \u00d7 max(0, risk \u2212 3)\ns.t. 0 \u2264 w \u2264 min(max_weight, capacity/portfolio),  \u03a3w = min(1, \u03a3 upper)\ncapacity = min(abs_cap, concentration_cap \u00d7 market_borrows)\n```"
+   "body_md": "Two supply-side USDC clusters I designed and built: (1) a Morpho Blue lending cluster that spreads a vault's idle USDC across curated markets with a mean-variance allocator, hard eligibility gates and a planner that turns weight deltas into supply/withdraw calls from the vault; (2) a junior-tranche cluster on Royco Dawn markets with 24-hour asynchronous redemptions, a wrap \u2192 finalize \u2192 execute deposit pipeline and a repair pipeline for orphaned on-chain requests. The junior book's risk rule \u2014 a tranche's depeg leverage (1/junior share) priced against its underlying's volatility before allocation, so a thin cushion on a moving underlying is excluded by score \u2014 is in `strategy.py` with tests; no Royco tranche series is bundled, so it has no scenario on this page.\n\n```\nsupply_apy = borrow_apr \u00d7 utilisation \u00d7 (1 \u2212 fee)\nmax  mu_adj'w \u2212 (\u03bb/2) w'\u03a3w     mu_adj = mu \u2212 50 bps \u00d7 max(0, risk \u2212 3)\ns.t. 0 \u2264 w \u2264 min(max_weight, capacity/portfolio),  \u03a3w = min(1, \u03a3 upper)\ncapacity = min(abs_cap, concentration_cap \u00d7 market_borrows)\n```"
   },
   {
    "heading": "Eligibility and exits",
    "body_md": "| gate | rule |\n|---|---|\n| oracle health | \u2265 2 observations in window, heartbeat-aware staleness per feed (BTC/USD 2 h, mF-ONE 5 d), else zero capacity |\n| utilisation | > 0.95 \u2192 excluded; health job trims supplied markets above 0.95 while liquidity exists |\n| hurdle hysteresis | 6 h-mean APY below hurdle for 3 consecutive ticks (18 h) \u2192 no new allocation |\n| exit band | existing position tolerated to hurdle \u2212 50 bps; below for 3 ticks \u2192 exit |\n| deposit depth | a deposit may lower utilisation by \u2264 100 bps: `max_dep = borrow/(util \u2212 0.01) \u2212 supply` |\n| drift gate | no rebalance unless total drift \u2265 1% of portfolio; per-leg floor 1,000 USDC |\n| withdrawals | reserve = pending queue demand + 50 bps, 1 h floor, subgraph \u2264 50 blocks behind; withdraw \u2264 80% of visible liquidity per market, worst market first |\n\nHurdle checks run on the window mean, not the instantaneous print \u2014 the same hysteresis idea as the loop cluster's net-gate."
   },
   {
-   "heading": "Production review and incidents",
-   "body_md": "- Lending cluster readiness review: 13 findings (P0\u2013P2) before capital \u2014 receipt-status handling, 300 s receipt timeout, nonce lock across build + send, equality constraint when the upper bounds don't sum to 1, fail-safe when the market-data source is fully down. Suite 88 \u2192 100+ tests; `validate_leaves` and `validate_runtime` preflights.\n- Junior cluster first deployment (2026-05-26, fixed in-session): reverted txs treated as success; aggregator fills short of quote reverting whole bundles (fixed by sizing at `amountOutMin`, then at realised balance); a 7,751% APY spike from annualising delta rows over short intervals; a dead APY signal that funnelled every deposit to one market; TVL adapters over-valuing tranches by +37% / +4.8%.\n- Orphaned on-chain requests (06-07/08): a stale-credentials DB incident orphaned requests whose tx succeeded with no DB row, and a cron re-requesting every 20 min against a shrinking balance produced a geometric dust loop (9 cancel txs). Shipped detection (`audit_gateway_requests`, `reconcile_redemptions`) and a runbook; root fix = persist intent before broadcast.\n- apyUSD junior-tranche loss (06-18): see the stress scenario."
+   "heading": "Review findings",
+   "body_md": "- Lending cluster readiness review: 13 findings (P0\u2013P2) \u2014 receipt-status handling, 300 s receipt timeout, nonce lock across build + send, equality constraint when the upper bounds don't sum to 1, fail-safe when the market-data source is fully down. Suite 88 \u2192 100+ tests; `validate_leaves` and `validate_runtime` preflights.\n- Junior cluster, first end-to-end run: reverted txs treated as success; aggregator fills short of quote reverting whole bundles (fixed by sizing at `amountOutMin`, then at realised balance); a 7,751% APY spike from annualising delta rows over short intervals; a dead APY signal that funnelled every deposit to one market; TVL adapters over-valuing tranches by +37% / +4.8%.\n- Orphaned on-chain requests: a stale-credentials DB incident orphaned requests whose tx succeeded with no DB row, and a cron re-requesting every 20 min against a shrinking balance produced a geometric dust loop (9 cancel txs). Detection (`audit_gateway_requests`, `reconcile_redemptions`) and a runbook; root fix = persist intent before broadcast."
   },
   {
    "heading": "Operations",
@@ -2530,7 +2477,7 @@
   },
   {
    "heading": "Reproduce",
-   "body_md": "```\npython -m strategies.lending_cluster.backtest\n```\n`strategy.py` = allocator (SLSQP), gates, planner, tranche arithmetic; `backtest.py` = daily replay on `data/algo_history.csv` and the depeg stress table."
+   "body_md": "```\npython -m strategies.lending_cluster.backtest\n```\n`strategy.py` = allocator (SLSQP), gates, planner, tranche arithmetic and the depeg-leverage risk rule; `backtest.py` = daily replay on `data/algo_history.csv`."
   }
  ],
  "generated": "2026-10-23"

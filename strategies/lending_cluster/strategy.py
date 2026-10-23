@@ -1,7 +1,7 @@
 """USDC lending cluster — mean-variance allocator with risk haircuts, eligibility gates and planner.
 
-Clean-room reimplementation of the Morpho Blue supply cluster I ran at Lucidly (mainnet),
-with the junior-tranche (Royco) variant's score rule and the lessons from its June 2026 postmortem.
+Clean-room reimplementation of the Morpho Blue supply cluster I built at Lucidly (mainnet), with the
+junior-tranche (Royco) variant's score rule, which prices the junior's depeg leverage before allocation.
 
     snapshot -> allocator -> planner -> Morpho supply/withdraw -> merkle manager payload -> guarded submit
 """
@@ -136,3 +136,26 @@ def junior_loss_from_depeg(depeg: float, junior_share: float) -> float:
     """A junior tranche absorbs the whole pool's loss first: loss_jr = min(1, depeg / junior_share).
     With a 25% junior tranche an 8.5% depeg is a 34% junior loss (~4x leverage)."""
     return min(1.0, depeg / junior_share) if junior_share > 0 else 1.0
+
+
+def junior_apy(underlying_apy: float, junior_share: float, senior_rate: float) -> float:
+    """Junior tranche yield when the senior takes a fixed rate: everything the underlying earns above the senior coupon
+    accrues to the junior, scaled by its share of the pool. Negative when the underlying cannot cover the coupon."""
+    if junior_share <= 0:
+        return 0.0
+    return (underlying_apy - senior_rate * (1 - junior_share)) / junior_share
+
+
+def depeg_risk_penalty(px_vol_ann: float, junior_share: float, lam: float = 1.0) -> float:
+    """Ex-ante price of the junior's depeg leverage: the underlying's annualised exchange-rate volatility multiplied by the
+    first-loss leverage 1/junior_share, scaled by lam. Subtracted from the junior APY before scoring, so a tranche whose
+    cushion is thin relative to how its underlying moves scores low or is excluded — the guardrail applied as a rule."""
+    if junior_share <= 0:
+        return float("inf")
+    return lam * px_vol_ann / junior_share
+
+
+def tranche_eligible(jr_apy: float, penalty: float, trailing_drawdown: float, junior_share: float, max_cushion_use: float = 0.25) -> bool:
+    """Admit a junior tranche only when its risk-adjusted yield is positive and the underlying's trailing drawdown has
+    used less than `max_cushion_use` of the junior cushion (loss_jr = drawdown / junior_share)."""
+    return (jr_apy - penalty) > 0 and junior_loss_from_depeg(trailing_drawdown, junior_share) < max_cushion_use

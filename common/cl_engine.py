@@ -1,13 +1,16 @@
 """Shared concentrated-liquidity simulation engine (single active band, optional Aave-style hedge leg).
 
-Used by strategies/hedged_btc_mm and strategies/eurc_usdc_mm. Units: everything in token0
+Used by strategies/hedged_btc_mm (page) and strategies/eurc_usdc_mm (fee reconciliation script, no page). Units: everything in token0
 (WBTC for WBTC/WETH, EURC for EURC/USDC); price P = token1 per token0.
 
 Fees come in two modes:
   measured — when `path` carries per-swap columns (amount0, amount1, liquidity; from strategies/cl_swaps),
              every in-range swap pays `amount_in * fee_tier * L_strategy / (L_pool + L_strategy)`, with the
              fee taken in the token that came in and valued in token0 at the swap price. This is the pool's
-             own arithmetic; nothing is assumed.
+             own arithmetic; nothing is assumed. The fee tier is read per row (`fee_pips`) when the swap log
+             carries it. Applied to the public EURC/USDC Aerodrome log (lucidlylabs/simulations) this gives 23 EURC
+             on the log's own window against the 75 that log accrued; the old log over-credited the position's
+             share of each swap. `python -m strategies.eurc_usdc_mm.backtest` prints that reconciliation.
   modelled — otherwise, fee income accrues on in-range LP value at `fee_apr_ref * ref_width / width`
              (fee share scales with concentration). The bundled price-only paths use this; it is an
              assumption and every page says so.

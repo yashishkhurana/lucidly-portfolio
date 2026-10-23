@@ -1,14 +1,15 @@
-"""Daily replay of the loop cluster allocator on archive Morpho Blue data (3 markets, 93 days).
+"""Daily replay of the siUSD/USDC leveraged loop on archive Morpho Blue data (93 days).
 
 Run:  python -m strategies.leverage_loop.backtest   (from the portfolio root)
 Writes results.json and index.html next to this file.
 
 Data: data/algo_history.csv — daily archive-RPC reads of collateral exchange rate (px),
-market supply/borrow and borrow APR for siUSD/USDC, USD3/USDC, stcUSD/USDT, 2026-03-22..06-22.
+market supply/borrow and borrow APR, 2026-03-22..06-22. This page uses the siUSD/USDC rows only; the file also
+holds USD3 and stcUSD series used by the lending page.
 Modelling choices (stated, not hidden):
   * collateral yield y = annualised trailing 3-day exchange-rate growth (cold start: no lever until known)
   * borrow APR b taken per daily sample; idle USDC earns 0
-  * entry fee charged on gross notional on every stcUSD lever (Cap mint 10 bps); USDC loops free
+  * siUSD/USDC wraps and unwinds are fee-free on-chain; gas is charged per manage tx
   * net-gate sustain = 2 daily samples (proxy for the hourly 6-sample rule), re-enter after 1 sample > +50 bps
   * markdown close at 1.5% below HWM sustained 2 samples (never fires: no markdown in window)
   * concentration cap 25% of market supply; liquidity cap = supply - borrow
@@ -30,11 +31,11 @@ from strategies.leverage_loop.strategy import (
 )
 
 MARKETS = {
-    "stcusd": Market("stcusd", risk_score=2, max_weight=1.0, entry_fee_bps=10, entry_cost_apy=0.01),
-    "siusd": Market("siusd", risk_score=3, max_weight=0.20),
-    "usd3": Market("usd3", risk_score=5, max_weight=0.10),
+    # single-market book: weight cap 1.0. In the multi-market cluster this market carried a 0.20 cap (borrow-rate inversion risk);
+    # with one market the cap would only decide how much sits idle, so it is stated here rather than applied.
+    "siusd": Market("siusd", risk_score=3, max_weight=1.0),
 }
-LIVE_FROM = {"siusd": "2026-03-22", "stcusd": "2026-03-22", "usd3": "2026-06-03"}  # first day the exchange rate moves (market live)
+LIVE_FROM = {"siusd": "2026-03-22"}  # first day the exchange rate moves (market live)
 START_CAPITAL = 1_000_000.0
 YIELD_LOOKBACK = 3
 GAS_PER_TX_USD = 25.0  # mainnet manage tx at ~50 gwei; charged on every lever, trim, de-lever, re-lever
@@ -42,11 +43,12 @@ GAS_PER_TX_USD = 25.0  # mainnet manage tx at ~50 gwei; charged on every lever, 
 
 def prepare() -> pd.DataFrame:
     df = morpho_algo_history()
+    df = df[df["market"].isin(MARKETS)].reset_index(drop=True)
     df["px"] = df["px"].astype(float) / 1e18
     # supply/borrow are in token units with 6 or 18 decimals; utilisation is scale-free
     df["util"] = (df["borrow"].astype(float) / df["supply"].astype(float)).clip(0, 1)
     # dollar depth from the collateral-market side: normalise per market by its decimals
-    dec = {"siusd": 6, "usd3": 6, "stcusd": 6}
+    dec = {"siusd": 6}
     df["supply_usd"] = [float(s) / 10 ** dec[m] for s, m in zip(df["supply"], df["market"])]
     df["borrow_usd"] = [float(s) / 10 ** dec[m] for s, m in zip(df["borrow"], df["market"])]
     df["live"] = [d >= pd.Timestamp(LIVE_FROM[m]) for d, m in zip(df["date"], df["market"])]
@@ -178,7 +180,7 @@ def build_results() -> dict:
                  tone_for(m["total_return"], 92, benchmark=(runs_1x if L > 1 else None))),
             tile("Annualised (simple)", fmt_pct(m["total_return"] * 365 / 92), "92-day window"),
             tile("Max drawdown", fmt_pct(m["max_drawdown"]), "on portfolio value", "bad" if m["max_drawdown"] < -0.01 else "neutral"),
-            tile("Entry fees paid", fmt_usd(r["fees"]), f"{r['fees']/START_CAPITAL*1e4:.0f} bps of capital · Cap mint 10 bps × {int(L)}x"),
+            tile("Entry fees paid", fmt_usd(r["fees"]), "siUSD/USDC wrap is fee-free on-chain; gas charged separately at $25 per manage tx"),
             tile("Net-gate de-levers", str(a["delever"]), f"{a['relever']} re-levers · {a['markdown_close']} markdown closes"),
             tile("Levers / trims", f"{a['lever']} / {a['trim']}", "10% weight deadband"),
             tile("Deployed at end", f"{r['deployed_pct']*100:.0f}%", f"idle {fmt_usd(c['idle'].iloc[-1])} · 2% buffer"),
@@ -187,8 +189,8 @@ def build_results() -> dict:
         alloc_md = "| loop | equity | state | levered net (last) |\n|---|---|---|---|\n" + "\n".join(
             f"| {k} | {fmt_usd(last[f'eq_{k}'])} | {last[f'state_{k}']} | {fmt_pct(last[f'net_{k}'])} |" for k in MARKETS)
         scenarios[name] = {
-            "label": name + (" (production)" if L == 8 else " hold" if L == 1 else ""),
-            "note": f"2026-03-22 → 2026-06-22, $1.0M start, 3 Morpho Blue stablecoin loops, target leverage {int(L)}x",
+            "label": name + (" hold" if L == 1 else ""),
+            "note": f"2026-03-22 → 2026-06-22, $1.0M start, siUSD/USDC loop on Morpho Blue, target leverage {int(L)}x",
             "verdict": (f"{'POSITIVE' if m['total_return'] > 0.0005 else 'NEGATIVE' if m['total_return'] < -0.0005 else 'FLAT'} carry after fees — "
                         f"{fmt_pct(m['total_return'])} over 92 days, max DD {fmt_pct(m['max_drawdown'])}, "
                         f"{a['delever']} forced de-levers"),
@@ -205,11 +207,11 @@ def build_results() -> dict:
             ],
             "tables": [{"title": "Final allocation", "md": alloc_md}],
             "notes": [
-                "Idle USDC modelled at 0%; collateral yield = trailing 3-day exchange-rate growth; borrow APR per daily sample; $25 gas per manage tx (lever, trim, de-lever, re-lever); Cap mint fee on stcUSD levers only — USDC-loop wraps and all unwinds are fee-free, as on-chain.",
+                "Idle USDC modelled at 0%; collateral yield = trailing 3-day exchange-rate growth; borrow APR per daily sample; $25 gas per manage tx (lever, trim, de-lever, re-lever); siUSD wraps and unwinds are fee-free, as on-chain.",
                 "Net-gate sustain = 2 daily samples (proxy for 6 hourly samples); re-enter after one sample above +50 bps.",
                 "No collateral markdown occurred in the window, so the PARKED path is exercised only in the parametric tables below.",
-                "Accrual uses the realised daily exchange-rate move at L× (15 small down-days in stcUSD cost 8× each), not a smoothed yield; the internal Lucidly sim on smoothed yields showed +0.30% at 8x and +1.32% at 1x over the same window — same ordering, more flattering level.",
-                "Market go-live dates respected: siUSD and stcUSD 2026-03-22, USD3 2026-06-03 (first day its exchange rate moves) — no pre-live rates are used.",
+                "Accrual uses the realised daily exchange-rate move at L×, not a smoothed yield, and the realised borrow APR per day: siUSD/USDC borrow printed 4–22% in this window, above the collateral yield on many days, which is why the levered rows earn less than the 1x hold.",
+                "Market go-live respected: siUSD/USDC 2026-03-22 (first day its exchange rate moves) — no pre-live rates are used.",
             ],
         }
     sweep = "| leverage | 92d return | annualised | max DD | entry fees | de-levers |\n|---|---|---|---|---|---|\n" + "\n".join(
@@ -228,16 +230,14 @@ def build_results() -> dict:
         f"| {y*100:.0f}% | {inversion_borrow_rate(8, y)*100:.2f}% |" for y in (0.03, 0.04, 0.05, 0.06, 0.07))
     sections = [
         {"heading": "What this is", "body_md": (
-            "A USDC vault running a portfolio of leveraged stablecoin carry loops on Morpho Blue (Ethereum mainnet). "
-            "Each loop wraps USDC into a yield-bearing stable (stcUSD, siUSD, USD3), supplies it as collateral, borrows the loan token "
-            "(USDT for stcUSD via an oracle-floored DEX leg inside the flashloan, USDC otherwise) and re-levers to a fixed per-market "
-            "target in one atomic Morpho flashloan. I owned the control design: allocation, leverage policy, the de-risking state machine, "
-            "the sizing caps and the backtests. Live from June 2026 on mainnet with three markets.\n\n"
+            "A USDC vault running a leveraged stablecoin carry loop on Morpho Blue (Ethereum mainnet): wrap USDC into siUSD, supply it as collateral, "
+            "borrow USDC against it and re-lever to a fixed target in one atomic Morpho flashloan. I owned the control design: sizing, leverage policy, "
+            "the de-risking state machine, the caps and the backtests.\n\n"
             "```\nnet(L) = L*y - (L-1)*b = y + (L-1)*(y - b)      LTV = (L-1)/L\n```\n"
             "The gate metric is the levered net at target leverage, never the raw spread: a loop is still net-positive with y < b while L*y > (L-1)*b.")},
         {"heading": "Allocation and sizing", "body_md": (
-            "- `score_i = net_i(L_target) / risk_i^beta` minus an entry-cost drag (1%/yr for stcUSD); a loop below the 25 bps lever margin scores 0.\n"
-            "- Weights proportional to score, clamped to hard caps (stcUSD 1.0 / siUSD 0.20 / USD3 0.10), freed mass renormalised onto the others (spill-on-cap).\n"
+            "- `score = net(L_target) / risk^beta` minus any entry-cost drag; a loop below the 25 bps lever margin scores 0 and is not levered.\n"
+            "- The allocator is written for several loops (weights proportional to score, hard caps, spill-on-cap); on this single-market book it reduces to deploy-or-hold.\n"
             "- `cap_borrow = min(target_borrow, available_liquidity, 25% of market supply − our debt, $1M per tick)`; a capped leg shrinks and the idle waits (wait-not-spill).\n"
             "- 2% idle withdrawal buffer; an equity move fires only beyond max($50, 10% of target); leverage adjusts only beyond 5% drift of target.\n"
             "- Fixed per-market leverage, not an optimiser: a grid search over L returns the max corner in any positive-spread regime at ~29 RPC reads per loop per tick; the cases a dial would handle are covered by SAFETY, the net-gate and the markdown close.")},
@@ -251,20 +251,18 @@ def build_results() -> dict:
             "A rate problem (negative spread) means de-lever and keep the yield asset; a principal problem (markdown) means exit regardless of carry.\n\n"
             "**Same-block markdown is the real liquidation control.** Morpho marks ERC4626 collateral at `convertToAssets`; a markdown m lifts LTV to LTV0/(1−m), "
             "and no off-chain reaction beats a same-block move: `m* = 1 − LTV0/LLTV`.\n\n" + md_tbl + "\n\n" + pnl_tbl +
-            "\n\nUnprotected single-step band at the 1.5% close threshold: ~1.5%..4.37%. \"High leverage is only safe on collateral that cannot gap\" — the junior cushion under each senior-tranche collateral, not reaction speed, bounds this.\n\n"
-            "**Borrow-rate inversion.** Net zeroes when `b > L/(L−1) · y` (1.143·y at 8x). siUSD/USDC borrow printed 21.65% at 100% utilisation on 2026-06-20 — the live inversion risk, and why siUSD is hard-capped at 0.20.\n\n" + inv_tbl)},
+            "\n\nUnprotected single-step band at the 1.5% close threshold: ~1.5%..4.37%. \"High leverage is only safe on collateral that cannot gap\" — the cushion under the collateral, not reaction speed, bounds this. What to watch: the same gate on a market with a volatile exchange rate (e.g. stcUSD) de-levers often and loses to entry fees; that market is not in this book.\n\n"
+            "**Borrow-rate inversion.** Net zeroes when `b > L/(L−1) · y` (1.143·y at 8x). siUSD/USDC borrow printed 21.65% at 100% utilisation on 2026-06-20 — the live inversion risk on this market, and the reason the net-gate exists.\n\n" + inv_tbl)},
         {"heading": "Leverage sweep and net-gate sensitivity", "body_md": sweep + (
-            "\n\nIn this window the in-sample spread (y − b) was only ~+0.3%: each turn of leverage added ~0.3% of gross carry but induced more than that in "
-            "net-gate churn (~70 bps per stcUSD de-lever/re-lever round-trip, Cap mint fee × leverage) plus tail risk, so realised return fell monotonically "
-            "with leverage while drawdown rose. The conclusion I took into production: size leverage to the live spread, and make the net-gate cost-aware "
-            "(longer sustain for entry-fee markets).")},
+            "\n\nEvery row is positive. Leverage did not add in this window: the siUSD/USDC borrow rate ran above the collateral yield on many days, so each turn of leverage "
+            "bought negative spread on those days and net-gate de-levers/re-levers (gas) on the rest, and realised return fell with leverage while drawdown rose. "
+            "The rule I took from it: size leverage to the live spread, not to the LLTV.")},
         {"heading": "Adversarial review — top findings", "body_md": (
             "- **Same-block markdown → liquidation (critical, accepted residual at 8x):** mitigated by the reactive 1.5% close and senior-tranche collateral; tightening options were lower per-market leverage (~4.5x), per-loop equity caps, or an oracle-push listener.\n"
             "- **Net-gate close was dead:** `spot_beats_idle = yield > 0` was always true for a yield-bearing stable, so the close branch could never fire. Rewritten as a sustained-negative-levered-net state machine.\n"
-            "- **Allocator churn re-paying the mint fee:** a $50 flat floor on a multi-100k book trimmed and re-levered every 15 min; fixed with a 10% weight deadband and an entry-cost gate (defer above 150 bps, never auto-enter above 400 bps).\n"
-            "- **Strategist EOA out of gas → trading freeze (2026-06-22):** ~0.00021 ETH left, every rebalance failed for >1h; a SAFETY de-lever would also have failed. Added low-gas paging to the health job and preflight.\n"
-            "- **Decoder missing a selector:** a leaf resolving in the merkle validator does not prove the deployed decoder supports it (`0xde42fa1c`); the stcUSD Cap path hit this. Rule: always run the anvil mainnet-fork E2E before trusting a new leaf. Three root regenerations came from this class of wiring bug.\n"
-            "- **Depeg-stuck exit on the USDT bridge:** beyond the 30 bps Chainlink floor the swap leg defers, so the largest book can hold but not adjust; accepted, residue swept and counted in NAV.\n"
+            "- **Allocator churn:** a $50 flat floor on a multi-100k book trimmed and re-levered every 15 min; fixed with a 10% weight deadband and an entry-cost gate (defer above 150 bps, never auto-enter above 400 bps).\n"
+            "- **Strategist EOA out of gas → rebalance freeze:** with ~0.00021 ETH left every rebalance fails, and a SAFETY de-lever would fail with it. Added low-gas paging to the health job and preflight.\n"
+            "- **Decoder missing a selector:** a leaf resolving in the merkle validator does not prove the deployed decoder supports it (`0xde42fa1c`). Rule: always run the anvil mainnet-fork E2E before trusting a new leaf. Three root regenerations came from this class of wiring bug.\n"
             "- **Oracle staleness unchecked** on markdown/swap-floor reads — flagged, listed to tighten.")},
         {"heading": "Operations", "body_md": (
             "| job | cadence | does |\n|---|---|---|\n"
@@ -273,16 +271,16 @@ def build_results() -> dict:
             "| net_gate | 60 min | sustained-negative de-lever / re-arm |\n"
             "| withdraw | 5 min | free idle for pending redemptions, worst loop first (indexer-driven, fail-closed) |\n"
             "| health | 15 min | deposit-halt on share-price drop vs HWM, cron liveness watchdog, LTV page, low-gas warning, Discord |\n"
-            "| loan_token_sweep | hourly | swap USDT residue > $50 back to USDC via oracle-floored DEX leg |\n\n"
+            "\n"
             "Read-only preflight validator (66 checks: every leaf against the live root, adapter binding, decoder constant, oracles, leverage feasibility vs LLTV, strategist role and gas), dry-run CLI, emergency exit, anvil fork E2E (lever/adjust/unwind, rebalance, SAFETY, net-gate, withdraw, health, concentration cap), Postgres state (snapshot, net history/state, actions, health, heartbeats), 26-panel Grafana dashboard, all-or-nothing env boot.")},
         {"heading": "Reproduce", "body_md": (
             "```\npython -m strategies.leverage_loop.backtest\n```\n"
             "`strategy.py` holds the pure control logic (net APY, allocator with spill-on-cap, three-state gate, LTV bands, markdown and inversion maths, sizing caps). "
-            "`backtest.py` replays it day by day on `data/algo_history.csv` (archive-RPC reads) and writes `results.json`, which this page renders.")},
+            "`backtest.py` replays it day by day on the siUSD/USDC rows of `data/algo_history.csv` (archive-RPC reads) and writes `results.json`, which this page renders.")},
     ]
     return {
-        "title": "Leveraged Stablecoin Loop Cluster — Morpho Blue",
-        "subtitle": "Clean-room reimplementation and replay of the control layer · Ethereum mainnet · live June 2026",
+        "title": "Leveraged siUSD/USDC Loop — Morpho Blue",
+        "subtitle": "Clean-room reimplementation and replay of the control layer · Ethereum mainnet · 22 Mar – 22 Jun 2026",
         "scenarios": scenarios,
         "default_scenario": "8x",
         "sections": sections,

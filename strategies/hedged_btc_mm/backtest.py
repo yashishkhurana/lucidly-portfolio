@@ -2,17 +2,15 @@
 
 Run:  python -m strategies.hedged_btc_mm.backtest   (from the portfolio root)
 Data: data/wbtc_weth_arbitrum_1min.csv — 1-minute pool price of the Uniswap v3 WBTC/WETH 0.05%
-      pool on Arbitrum, 2026-03-10 15:33 → 03-11 17:10 UTC (25.7 h, 1,030 points); plus a 30-day GBM
-      path (SYNTHETIC, labelled) for the band-width sweep.
+      pool on Arbitrum, 2026-03-10 15:33 → 03-11 17:10 UTC (25.7 h, 1,030 points).
 Fees: measured per swap from data/swaps_wbtc_weth_arb.csv (amount_in × 0.05% × L/(L_pool+L)) when that file
       is present — it is bundled — else modelled at fee_apr_ref * (500 / width) on in-range LP value
-      (12%/yr at 500 ticks), which the synthetic sweeps still use.
+      (12%/yr at 500 ticks).
 """
 from __future__ import annotations
 
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 from common import metrics
@@ -39,14 +37,6 @@ def real_path() -> pd.DataFrame:
     return pd.read_csv(DATA / "wbtc_weth_arbitrum_1min.csv", parse_dates=["time"])[["time", "price"]]
 
 
-def gbm_path(days: int = 30, vol: float = 0.40, seed: int = 11, p0: float = 34.35) -> pd.DataFrame:
-    rng = np.random.default_rng(seed)
-    n = days * 24 * 60
-    r = rng.normal(-0.5 * (vol ** 2) / (365 * 24 * 60), vol / np.sqrt(365 * 24 * 60), n)
-    t = pd.date_range("2026-03-10", periods=n, freq="min", tz="UTC")
-    return pd.DataFrame({"time": t, "price": p0 * np.exp(np.cumsum(r))})
-
-
 def run(path, width, hedged=True):
     p = P if hedged else CLParams(mm_alloc=0.60, hedge_alloc=0.40, swap_haircut=0.001)  # same split, hedge leg idle
     return simulate(path, width, p, DEPOSIT, FEE_APR_REF, hedge_fns=HEDGE if hedged else None)
@@ -59,10 +49,6 @@ def scenario(label: str, note: str, path: pd.DataFrame, width: int, synthetic: b
     days = h["days"]
     lbl, val = ann_or_window(h["pnl"] / DEPOSIT, days)
     resid = h["pnl"] - (h["fees"] - h["il"] - h["in_band_il"] - h["slippage"] - h["borrow"])
-    sweep = "| width (ticks) | hedged equity vs 10 BTC | fees | realised IL | in-band IL | slippage | rotations | max abs WETH delta |\n|---|---|---|---|---|---|---|---|\n"
-    for w in (100, 250, 500, 1000):
-        r = run(path, w, True)
-        sweep += f"| {w} | {r['pnl']:+.4f} | {r['fees']:.4f} | {r['il']:.4f} | {r['in_band_il']:.4f} | {r['slippage']:.4f} | {r['rebalances']} | {r['max_abs_delta']:.1f} |\n"
     hv = metrics.annualised_vol(metrics.returns_from_equity(h["curve"]["equity"].iloc[::60]), 365 * 24)
     uv = metrics.annualised_vol(metrics.returns_from_equity(u["curve"]["equity"].iloc[::60]), 365 * 24)
     return {
@@ -94,7 +80,6 @@ def scenario(label: str, note: str, path: pd.DataFrame, width: int, synthetic: b
             series("Net WETH exposure", x, c["net_token1_delta"]),
             series("Aave LTV", x, c["ltv"]),
         ],
-        "tables": [{"title": f"Band-width sweep (hedged, {label})", "md": sweep}],
         "notes": [
             ("Fees are measured from the pool's Swap events (volume, direction and in-range pool liquidity per swap)." if h["fee_mode"] == "measured"
              else "Fees are the only modelled quantity (no swap volume in the bundled path); IL, token amounts, hedge debt, LTV and borrow are exact."),
@@ -109,18 +94,15 @@ def scenario(label: str, note: str, path: pd.DataFrame, width: int, synthetic: b
 
 def build_results() -> dict:
     real = real_path()
-    gbm = gbm_path()
     sc = {
         "real_250": scenario("Real swaps · 250-tick band", "Arbitrum WBTC/WETH 0.05% pool, 2026-03-10 → 03-11 (25.7 h, real" + (", 9,940 swaps, measured fees)" if SWAPS.exists() else ", 1-min prices, modelled fees)"), real, 250, False),
-        "gbm_250": scenario("30-day GBM · 250-tick band", "SYNTHETIC ETH/BTC path, 40% ann. vol, 1-min steps", gbm, 250, True),
-        "gbm_1000": scenario("30-day GBM · 1000-tick band", "SYNTHETIC ETH/BTC path, 40% ann. vol, 1-min steps", gbm, 1000, True),
     }
     sections = [
         {"heading": "What this is", "body_md": (
             "A WBTC-denominated vault that market-makes the WBTC/WETH 0.05% pool on Arbitrum with concentrated liquidity and hedges the WETH inventory the LP accumulates with a WETH loan on Aave v3 against WBTC collateral. "
             "60% of equity sits in the LP band, 40% in the hedge leg. Benchmark is BTC; target is near-zero WETH delta; income is swap fees net of impermanent loss, rebalance slippage and borrow interest. "
-            "I built the position maths, the hedge optimiser, the rebalance rules and the backtester; execution ran through pre-minted NFT tick bands and flashloan-levered Aave legs via the merkle-verified vault manager. "
-            "This page is primarily an engine demonstration: the real window is one day and the longer runs are synthetic.\n\n"
+            "I built the position maths, the hedge optimiser, the rebalance rules and the backtester; execution is through Uniswap v3 NFT positions and flashloan-levered Aave legs from the vault. "
+            "The window on this page is the 25.7 hours of pool history bundled with the repo, with fees measured from the pool's own Swap events.\n\n"
             "```\namt0 = L·(1/√P − 1/√Pb)   amt1 = L·(√P − √Pa)   V_LP(WBTC) = amt0 + amt1/P\nnet WETH delta = amt1 − D         LTV = (D/P) / collateral,  D_max = E_h · LTV_max/(1−LTV_max) · P\n```")},
         {"heading": "Hedge sizing", "body_md": (
             "Debt D is chosen on [0, D_max] to minimise the worse of the two band-edge losses with a small asymmetry penalty:\n\n"
@@ -132,18 +114,20 @@ def build_results() -> dict:
             "| LTV > 0.70 | repay debt to collateral × 0.60 × P |\n"
             "| in range, hedge debt drift ≥ 50% of target (explainer: 20%) | re-solve hedge |\n"
             "| deposit / withdraw | split by current LP weight; scale L, collateral, debt pro rata |")},
-        {"heading": "What the engine shows", "body_md": (
-            "The band-width sweep is IL arithmetic against a linear fee assumption, so read it as a sensitivity, not a finding: narrow bands rotate constantly and pay IL + slippage every time, wide bands earn less per unit of liquidity but rotate rarely. "
-            "What the real day says is narrower: over 25.7 hours ETH/BTC stayed inside a ±1.25% band, so there were no rotations and no realised IL. With fees measured from the pool's own Swap events the LP earned about five times what the modelled rate assumed (the pool was busy and our liquidity share in a tight band is large), which is enough to cover the hedge leg's seeding haircut and borrow on that day; with the modelled rate it was not. One day is one day — it does not change the sweep's conclusion about rotation costs. "
-            "The production backtest on the same strategy (reference plot below, 1.07 days, five rotations) found fees 0.0207 BTC vs slippage 0.0326 + IL ≈0.066, net −0.086 BTC — the same conclusion, that rotation costs dominate on this pair. "
-            "The hedge's job is the BTC-denominated curve. In these runs it lowers equity vol but not drawdown (tiles — the GBM drawdowns are IL-driven and the hedge cannot remove IL), and it does not pay for its own slippage and borrow.")},
-        {"heading": "Reference plot — production backtest", "body_md": (
+        {"heading": "What the real day shows", "body_md": (
+            "Over 25.7 hours ETH/BTC stayed inside a ±1.25% band, so there were no rotations and no realised IL. With fees measured from the pool's own Swap events the LP earned about five times what a 12%/yr fee assumption would have given (the pool was busy and a tight band's share of in-range liquidity is large), which covered the hedge leg's seeding haircut and borrow interest on the day; "
+            "the hedged book finished ahead of holding 10 BTC. One day is one day: the result is reported as a window figure and not annualised.")},
+        {"heading": "How fees are measured", "body_md": (
+            "Each Swap event gives the amount in, the direction and the pool's in-range liquidity `L_pool` after the swap. The position's fee on that swap is `amount_in × fee_tier × L / (L_pool + L)` with `L` the position's own liquidity, "
+            "and the fee tier is read from the pool per row (`fee()`), so a pool that changes its tier is charged correctly. This is the method in `common/cl_engine.py` (fee_mode = measured) and it replaced the fee-APR assumption wherever a swap log exists. "
+            "Applying it to my earlier public EURC/USDC Aerodrome backtest (`lucidlylabs/simulations`) gave 23 EURC of fees on the log's own window against about 79 (51.0 EURC + 27.9 USDC) the old log accrued: that log had credited the position a larger share of each swap than the chain's per-swap liquidity supports. The correction is to the fee line — on the like-for-like window it moved equity by 0.6 bp — and is recorded in the README.")},
+        {"heading": "Reference plot — earlier public backtest", "body_md": (
             "![Hedged WBTC/WETH backtest, 10 spacing](../../data/hedged_wbtc_weth_backtest_10_spacing.png)\n\n"
-            "From `github.com/lucidlylabs/simulations` (public). Panels: strategy AUM, price vs active range, fees vs IL + slippage, Aave LTV, net WETH exposure, fee wallet vs borrow cost, pool tick vs band.")},
+            "From `github.com/lucidlylabs/simulations` (public): a 1.07-day run with five band rotations, where rotation slippage and IL exceeded fees — the reason the band on this page is 250 ticks and the hedge is re-solved rather than the band rotated on every drift. Panels: strategy AUM, price vs active range, fees vs IL + slippage, Aave LTV, net WETH exposure, fee wallet vs borrow cost, pool tick vs band.")},
         {"heading": "Reproduce", "body_md": "```\npython -m strategies.hedged_btc_mm.backtest\npytest tests/test_clmm.py\n```\n`common/clmm.py` = CL math (tested); `common/cl_engine.py` = the shared simulator; `strategy.py` = hedge optimiser and rules."},
     ]
     return {"title": "Hedged WBTC/WETH Concentrated-Liquidity MM — Uniswap v3 + Aave",
-            "subtitle": "LP-and-hedge strategy on Arbitrum, BTC-denominated · engine demonstration with a band-width sweep",
+            "subtitle": "LP-and-hedge strategy on Arbitrum, BTC-denominated · 25.7 h of pool history with measured fees",
             "scenarios": sc, "default_scenario": "real_250", "sections": sections}
 
 

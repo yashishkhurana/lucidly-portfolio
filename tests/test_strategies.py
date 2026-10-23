@@ -4,9 +4,6 @@ import pytest
 
 from common import metrics
 from strategies.coin_carry_vault.strategy import Ladder, decide, delever_route, price_drop_to_liquidation
-from strategies.dn_cluster.strategy import Params as DNParams
-from strategies.dn_cluster.strategy import allocate, seed_allocation, should_close, short_liquidation_price
-from strategies.dn_cluster.strategy import Asset
 from strategies.lending_cluster.strategy import junior_loss_from_depeg, max_deposit_for_util_drop, solve_weights
 from strategies.lending_cluster.strategy import Params as LParams
 from strategies.leverage_loop.strategy import (ACTIVE, PARKED, UNLEVERED, LoopState, Params, equity_pnl_for_markdown,
@@ -102,27 +99,6 @@ def test_junior_loss_leverage():
     assert junior_loss_from_depeg(0.5, 0.25) == 1.0
 
 
-# ----------------------------------------------------------------------------- DN cluster
-
-def test_seed_allocation_split():
-    x = seed_allocation(100_000, 4, 3.0, DNParams())
-    assert x == pytest.approx(0.995 * 100_000 / (1 + 1 / 3))
-
-
-def test_allocate_drops_non_positive_funding_and_weights_by_funding():
-    assets = {"A": Asset("A"), "B": Asset("B"), "C": Asset("C")}
-    out = allocate(1000, {"A": 2e-5, "B": -1e-5, "C": 1e-5}, assets, DNParams())
-    assert "B" not in out and out["A"] == pytest.approx(2 * out["C"])
-
-
-def test_short_liquidation_and_guard():
-    liq = short_liquidation_price(100, 3.0, 0.0125)
-    assert liq == pytest.approx(100 * (4 / 3) / 1.0125)
-    p = DNParams()
-    assert should_close(1e-5, 100 * 0.81 * liq / 100, liq, 100, 100, p) == "liq-guard"
-    assert should_close(-1e-6, 100, liq, 100, 100, p) == "funding<=0"
-    assert should_close(1e-5, 100, liq, 106, 100, p) == "hedge-drift"
-    assert should_close(1e-5, 100, liq, 100, 100, p) is None
 
 
 # ----------------------------------------------------------------------------- carry ladder
@@ -140,10 +116,35 @@ def test_ladder_decisions():
     assert delever_route(1000, 5000, 100, 2000) == "two_stage_redeem"
 
 
-def test_allocate_never_weights_negative_funding():
-    assets = {"A": Asset("A"), "B": Asset("B")}
-    p = DNParams(funding_floor=-1.0)                       # no-gate configuration lets f <= 0 through
-    out = allocate(1000, {"A": -2e-5, "B": 1e-5}, assets, p)
-    assert out["B"] == pytest.approx(1000) and out.get("A", 0.0) == 0.0
-    out = allocate(1000, {"A": -2e-5, "B": -1e-5}, assets, p)
-    assert out["A"] == pytest.approx(500) and out["B"] == pytest.approx(500)
+# ----------------------------------------------------------------------------- dnENA
+
+def test_dn_ena_sizing_and_margin():
+    from strategies.dn_ena.strategy import (Params as EP, margin_health, pt_discount_apy, round_trip_fee,
+                                            short_liquidation_px, should_rotate, size_entry, topup_needed)
+    p = EP()
+    e = size_entry(100_000, 0.14, 0.96, p)
+    assert e["reserve"] == pytest.approx(15_000)
+    assert e["pt_cost"] + e["margin"] + e["reserve"] == pytest.approx(100_000)        # capital conserved
+    assert e["pt_cost"] == pytest.approx(e["qty"] * 0.96 * 0.14)                        # pt_qty == short_qty
+    assert pt_discount_apy(0.96, 88) == pytest.approx((1 / 0.96) ** (365 / 88) - 1)
+    liq = short_liquidation_px(0.14, e["margin"], e["qty"], p.maint_margin)
+    assert margin_health(e["margin"], 0.14, liq, e["qty"], 0.0, p.maint_margin) == pytest.approx(1.0)   # health 1 at liq
+    assert topup_needed(e["margin"], 0.14, 0.14, e["qty"], 0.0, p) == 0.0
+    need = topup_needed(e["margin"], 0.14, liq * 0.999, e["qty"], 0.0, p)
+    assert need > 0
+    assert margin_health(e["margin"] + need, 0.14, liq * 0.999, e["qty"], 0.0, p.maint_margin) == pytest.approx(p.topup_health)
+    fee = round_trip_fee(1_000, p)
+    assert fee == pytest.approx(1_000 * (2 * 0.0008 + 2 * 0.00045))
+    assert should_rotate(0.18, 44, 0.19, 88, 1_000, p) is False               # 1% × 44/365 × 1000 = 1.2 < 2.5 fee
+    assert should_rotate(0.18, 44, 0.19, 88, 1_000, EP(rotate_rule="single_print")) is True
+    assert should_rotate(0.18, 44, 0.30, 88, 1_000, EP(rotate_rule="never")) is False
+
+
+def test_tranche_risk_rule():
+    from strategies.lending_cluster.strategy import depeg_risk_penalty, junior_apy, tranche_eligible
+    assert junior_apy(0.055, 0.33, 0.04) == pytest.approx((0.055 - 0.04 * 0.67) / 0.33)
+    assert junior_apy(0.013, 0.33, 0.04) < 0                                    # underlying cannot cover the coupon
+    assert depeg_risk_penalty(0.01, 0.25) == pytest.approx(0.04)                 # 4x leverage on 1% vol
+    assert tranche_eligible(0.085, 0.04, 0.0, 0.33) is True
+    assert tranche_eligible(0.085, 0.09, 0.0, 0.33) is False                     # penalty exceeds yield
+    assert tranche_eligible(0.085, 0.01, 0.10, 0.33) is False                    # 10% drawdown uses 30% of the cushion

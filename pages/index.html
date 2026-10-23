@@ -21,39 +21,29 @@ pre{font:13px Menlo,monospace;background:#f3f3f3;padding:12px;overflow:auto}
 </head>
 <body><div class="wrap">
 
-<h1>Strategies I ran at Lucidly Labs, 2024–26</h1>
+<h1>Strategies I designed and built at Lucidly Labs, 2024–26</h1>
 <p class="small">Yashish Khurana · <a href="https://x.com/0xYashish">@0xYashish</a></p>
 
-<p>These are the DeFi yield strategies I designed and ran in production for two years: stablecoin loops, funding carry, LP with a hedge, lending. The production code belongs to Lucidly, so each one here is a rewrite: the allocation and risk rules in plain Python, a replay on bundled data, and a page of results.</p>
-
-<p>If you only read one thing, read the funding carry page. I replayed my own production close rule on 90 days of real Hyperliquid funding and it lost 34%, almost all of it in fees from closing and reopening ~400 times. The rule I shipped was bad. The fix was to trade less.</p>
+<p>These are DeFi yield strategies I designed and built over two years: a fixed-yield delta-neutral book, a stablecoin loop, a lending allocator and a hedged LP. The production code belongs to Lucidly, so each one here is a rewrite: the allocation and risk rules in plain Python, a replay on bundled data, and a page of results.</p>
 
 <h2>The strategies</h2>
 
-<div class="s"><a href="../strategies/dn_cluster/index.html">Delta-neutral funding carry</a> — Hyperliquid, 4 coins, long spot / short perp at 3x.<br>
-<span class="n">Real data, Jul–Oct 2026. The single-print close rule paid ~45 bps a round trip, ~400 times, to collect ~9%/yr of funding. A 24-hour average instead of a single print takes it to roughly flat. No funding gate at all is the best row (+1.3%, 4 closes). Gross opportunity in the window was ~7%/yr.</span></div>
+<div class="s"><a href="../strategies/dn_ena/index.html">dnENA — fixed yield plus a short</a> — Pendle PT-sENA, ENA short on Hyperliquid at 1x, 15% reserve.<br>
+<span class="n">Real data. 422 rolling 88-day windows, start dates Jun 2025 – Jul 2026: 85% positive, median +4.5% annualised, worst −27%. The hedge was lost in 105 windows, when the Jun–Sep 2025 ENA rally outran the reserve. In the reserve sweep a 50% reserve loses it in none, at a lower yield. The Feb–Apr 2026 window on its own made +1.45%.</span></div>
 
-<div class="s"><a href="../strategies/leverage_loop/index.html">Leveraged stablecoin loops</a> — Morpho Blue, 3 markets, 1x to 8x.<br>
-<span class="n">Real data, 93 days of archive reads. Return falls with leverage once you charge gas and entry fees: +0.9% at 1x, −1.4% at 8x over the window. The interesting part is the gate: lever on net yield after borrow, not the raw spread, and keep hysteresis on the exit or you churn.</span></div>
+<div class="s"><a href="../strategies/leverage_loop/index.html">Leveraged siUSD/USDC loop</a> — Morpho Blue, 1x to 8x.<br>
+<span class="n">Real data, 22 Mar – 22 Jun 2026. Every row was positive, but leverage didn't help: +1.31% at 1x, +0.85% at 8x, because the borrow rate ran above the collateral yield on many days. The gate levers on net yield after borrow, not the raw spread, and de-levered four times at 8x.</span></div>
 
-<div class="s"><a href="../strategies/lending_cluster/index.html">USDC lending cluster, plus the apyUSD postmortem</a> — Morpho Blue and Royco.<br>
-<span class="n">Real data, same 93 days. The allocator is "mean-variance" on paper but with a 4-day window the variance term does nothing; the caps and hurdles are what bind, and half the book sat idle. The junior tranche lost 34% on an 8.5% depeg: first-loss leverage I understood on paper and underweighted in practice.</span></div>
+<div class="s"><a href="../strategies/lending_cluster/index.html">USDC lending cluster</a> — Morpho Blue, 3 markets.<br>
+<span class="n">Real data, same window. +0.48% over 93 days. The allocator is mean-variance on paper, but the hurdles and caps are what bind: on average only 38% of the book was deployed. The junior-tranche risk rule is in the code with a test; there is no tranche data, so it has no scenario.</span></div>
 
 <div class="s"><a href="../strategies/hedged_btc_mm/index.html">WBTC/WETH concentrated liquidity with a hedge</a> — Uniswap v3 and Aave, Arbitrum.<br>
-<span class="n">One real day, 9,940 swaps, fees measured from the pool's events: ~5× what my flat fee model assumed, enough to pay for the hedge that day. On synthetic 30-day paths the hedge cuts vol but not the drawdowns, which come from IL. One day is one day.</span></div>
-
-<div class="s"><a href="../strategies/eurc_usdc_mm/index.html">EURC/USDC concentrated liquidity</a> — Aerodrome, Base.<br>
-<span class="n">Measured fees on the window of my earlier public backtest are 23 EURC against the 75 that backtest claimed. The old one gave the position a bigger share of each swap than the pool's liquidity allows. That was my mistake and the page says so.</span></div>
-
-<div class="s"><a href="../strategies/coin_carry_vault/index.html">BTC and ETH carry vaults</a> — Morpho Blue.<br>
-<span class="n">Synthetic price paths, real borrow rates. An LTV ladder (0.60 / 0.65 / 0.70 / 0.74, liquidation at 0.86) with a staged delever route. A 35% gap in a day liquidates it from 0.65; the ladder handles drift, sizing handles gaps.</span></div>
-
-<p class="small">There is also a <a href="../strategies/vol_cone_forecast/index.html">small vol-cone tool</a> I used to size margin reserves.</p>
+<span class="n">One real day, 9,940 swaps, fees measured from the pool's events: about 5× what a flat 12%/yr fee assumption gives. +0.0108 BTC against holding 10 BTC, and the hedge halved equity vol. One day is one day.</span></div>
 
 <h2>Running it</h2>
 
 <pre>pip install -r requirements.txt
-pytest            # 28 tests
+pytest            # 26 tests
 python build_all.py</pre>
 
 <p class="small">Each strategy is <code>strategies/&lt;name&gt;/strategy.py</code> (the rules) and <code>backtest.py</code> (the replay, which writes the page). Nothing under 30 days is annualised, nothing is called good without a benchmark, and none of it is a return claim.</p>
