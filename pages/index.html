@@ -22,7 +22,7 @@ pre{font:13px Menlo,monospace;background:#f3f3f3;padding:12px;overflow:auto}
 <body><div class="wrap">
 
 <h1>Strategies I designed and built at Lucidly Labs, 2024–26</h1>
-<p class="small">Yashish Khurana · <a href="https://x.com/0xYashish">@0xYashish</a></p>
+<p class="small">Yashish Khurana<br><a href="https://www.linkedin.com/in/yashishkhurana">LinkedIn</a> · <a href="https://x.com/0xyashish">X</a> · <a href="https://github.com/yashishkhurana">GitHub</a></p>
 
 <p>These are DeFi yield strategies I designed and built over two years: a fixed-yield delta-neutral book, a stablecoin loop, a lending allocator and a hedged LP. The production code belongs to Lucidly, so each one here is a rewrite: the allocation and risk rules in plain Python, a replay on bundled data, and a page of results.</p>
 
@@ -39,13 +39,5 @@ pre{font:13px Menlo,monospace;background:#f3f3f3;padding:12px;overflow:auto}
 
 <div class="s"><a href="../strategies/hedged_btc_mm/index.html">WBTC/WETH concentrated liquidity with a hedge</a> — Uniswap v3 and Aave, Arbitrum.<br>
 <span class="n">One real day, 9,940 swaps, fees measured from the pool's events: about 5× what a flat 12%/yr fee assumption gives. +0.0108 BTC against holding 10 BTC, and the hedge halved equity vol. One day is one day.</span></div>
-
-<h2>Running it</h2>
-
-<pre>pip install -r requirements.txt
-pytest            # 26 tests
-python build_all.py</pre>
-
-<p class="small">Each strategy is <code>strategies/&lt;name&gt;/strategy.py</code> (the rules) and <code>backtest.py</code> (the replay, which writes the page).</p>
 
 </div></body></html>
