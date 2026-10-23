@@ -1,0 +1,224 @@
+{
+ "title": "Daily Volatility-Cone Forecaster",
+ "subtitle": "Lognormal 1-day / 30-day bands from implied or realised vol \u00b7 risk-desk sizing input",
+ "scenarios": {
+  "sample": {
+   "label": "Forecast 2026-10-22",
+   "note": "sample output bundled in data/; --live refreshes from Deribit",
+   "verdict": "BTC 30-day 90% cone: $67,585 \u2013 $96,908 at \u03c3 38.2% implied",
+   "verdict_tone": "neutral",
+   "tiles": [
+    {
+     "label": "BTC spot",
+     "value": "$81,416",
+     "sub": "\u03c3 38.2% \u00b7 Deribit DVOL (30d implied)",
+     "tone": "neutral"
+    },
+    {
+     "label": "BTC 30d 90% range",
+     "value": "$67,585 \u2013 $96,908",
+     "sub": "1d 90%: 78,766\u201384,122",
+     "tone": "neutral"
+    },
+    {
+     "label": "ETH spot",
+     "value": "$2,384",
+     "sub": "\u03c3 52.5% \u00b7 Deribit DVOL (30d implied)",
+     "tone": "neutral"
+    },
+    {
+     "label": "ETH 30d 90% range",
+     "value": "$1,840 \u2013 $3,019",
+     "sub": "1d 90%: 2,278\u20132,493",
+     "tone": "neutral"
+    },
+    {
+     "label": "SOL spot",
+     "value": "$103.57",
+     "sub": "\u03c3 41.0% \u00b7 Realized vol (30d daily, annualized)",
+     "tone": "neutral"
+    },
+    {
+     "label": "SOL 30d 90% range",
+     "value": "$84.76 \u2013 $124.82",
+     "sub": "1d 90%: 99.96\u2013107.28",
+     "tone": "neutral"
+    },
+    {
+     "label": "HYPE spot",
+     "value": "$77.52",
+     "sub": "\u03c3 51.5% \u00b7 Realized vol (30d daily, annualized)",
+     "tone": "neutral"
+    },
+    {
+     "label": "HYPE 30d 90% range",
+     "value": "$60.15 \u2013 $97.74",
+     "sub": "1d 90%: 74.13\u201381.00",
+     "tone": "neutral"
+    }
+   ],
+   "series": [
+    {
+     "label": "BTC 30-day lognormal cone, 90% band ($)",
+     "x": [
+      "d+0",
+      "d+1",
+      "d+2",
+      "d+3",
+      "d+4",
+      "d+5",
+      "d+6",
+      "d+7",
+      "d+8",
+      "d+9",
+      "d+10",
+      "d+11",
+      "d+12",
+      "d+13",
+      "d+14",
+      "d+15",
+      "d+16",
+      "d+17",
+      "d+18",
+      "d+19",
+      "d+20",
+      "d+21",
+      "d+22",
+      "d+23",
+      "d+24",
+      "d+25",
+      "d+26",
+      "d+27",
+      "d+28",
+      "d+29",
+      "d+30"
+     ],
+     "y": {
+      "low": [
+       81416.12,
+       78765.51239,
+       77683.93068,
+       76860.50832,
+       76170.72429,
+       75566.3454,
+       75022.63423,
+       74524.89533,
+       74063.5536,
+       73631.95805,
+       73225.26602,
+       72839.82163,
+       72472.78457,
+       72121.89604,
+       71785.3246,
+       71461.56083,
+       71149.34325,
+       70847.6048,
+       70555.43327,
+       70272.04159,
+       69996.74503,
+       69728.94345,
+       69468.10741,
+       69213.767,
+       68965.50285,
+       68722.93888,
+       68485.73625,
+       68253.58842,
+       68026.21696,
+       67803.36812,
+       67584.80982
+      ],
+      "median": [
+       81416.12,
+       81399.83836,
+       81383.55997,
+       81367.28484,
+       81351.01297,
+       81334.74435,
+       81318.47898,
+       81302.21686,
+       81285.958,
+       81269.70239,
+       81253.45003,
+       81237.20092,
+       81220.95506,
+       81204.71244,
+       81188.47308,
+       81172.23696,
+       81156.00409,
+       81139.77447,
+       81123.54809,
+       81107.32496,
+       81091.10507,
+       81074.88843,
+       81058.67502,
+       81042.46486,
+       81026.25795,
+       81010.05427,
+       80993.85383,
+       80977.65664,
+       80961.46268,
+       80945.27196,
+       80929.08448
+      ],
+      "high": [
+       81416.12,
+       84122.26981,
+       85259.38088,
+       86138.31977,
+       86883.60748,
+       87543.47723,
+       88142.66643,
+       88695.87053,
+       89212.66462,
+       89699.69971,
+       90161.81845,
+       90602.67674,
+       91025.11487,
+       91431.39164,
+       91823.33851,
+       92202.46489,
+       92570.03226,
+       92927.10769,
+       93274.60338,
+       93613.30641,
+       93943.90152,
+       94266.98883,
+       94583.09779,
+       94892.69832,
+       95196.20978,
+       95494.00825,
+       95786.43259,
+       96073.78933,
+       96356.35689,
+       96634.38904,
+       96908.11785
+      ]
+     },
+     "kind": "line",
+     "unit": "$"
+    }
+   ],
+   "tables": [
+    {
+     "title": "All assets",
+     "md": "| asset | spot | \u03c3 (ann.) | 1d 90% | 30d 68% | 30d 90% | 30d 95% | 30d median |\n|---|---|---|---|---|---|---|---|\n| BTC | 81,416 | 38.2% | 78,766\u201384,122 | 72,532\u201390,298 | 67,585\u201396,908 | 65,292\u2013100,312 | 80,929 |\n| ETH | 2,384 | 52.5% | 2,278\u20132,493 | 2,028\u20132,740 | 1,840\u20133,019 | 1,755\u20133,166 | 2,357 |\n| SOL | 103.57 | 41.0% | 99.96\u2013107.28 | 91.44\u2013115.70 | 84.76\u2013124.82 | 81.68\u2013129.54 | 102.86 |\n| HYPE | 77.52 | 51.5% | 74.13\u201381.00 | 66.16\u201388.87 | 60.15\u201397.74 | 57.42\u2013102.39 | 76.68 |\n"
+    }
+   ],
+   "notes": [
+    "Used as the daily reserve-sizing input: perp margin reserves in the funding-carry cluster were set so the 30-day 95% high stayed below 0.8 \u00d7 the short's liquidation price."
+   ]
+  }
+ },
+ "default_scenario": "sample",
+ "sections": [
+  {
+   "heading": "Method",
+   "body_md": "```\nS_T = S_0 \u00b7 exp((\u03bc \u2212 \u03c3\u00b2/2)\u00b7T \u00b1 z\u00b7\u03c3\u00b7\u221aT),   z = 1.00 / 1.645 / 1.96\n\u03c3 = Deribit DVOL (BTC, ETH) or 30d realised daily vol annualised (SOL, HYPE)\n\u03bc = 0, or a damped external 24h prediction: \u03bc = clip(0.25 \u00d7 365 \u00d7 r_24h, \u00b140%/yr)\n```\nNo claim of edge: it is a calibrated-vol cone to size margin, reserves and liquidation guards consistently across the desk, refreshed daily and archived (260 daily runs Jun\u2013Oct 2026)."
+  },
+  {
+   "heading": "Reproduce",
+   "body_md": "```\npython -m strategies.vol_cone_forecast.forecast\npython -m strategies.vol_cone_forecast.forecast --live\n```"
+  }
+ ],
+ "generated": "2026-10-23"
+}

@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Yashish Khurana — Strategy Portfolio</title>
+<style>
+:root{--bg:#f4f5f7;--card:#fff;--ink:#14161a;--muted:#6b7280;--line:#e5e7eb;--accent:#4f46e5}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.55 -apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1080px;margin:0 auto;padding:36px 20px 60px}
+h1{font-size:24px;margin:0 0 4px;font-weight:650;letter-spacing:-.01em}.sub{color:var(--muted);margin-bottom:22px}
+h2{font-size:15px;margin:28px 0 10px;font-weight:650}
+p{margin:6px 0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:10px 0}
+table{border-collapse:collapse;width:100%;font-size:13px}th,td{border-bottom:1px solid var(--line);padding:9px 8px;text-align:left;vertical-align:top}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+code{font:12px ui-monospace,Menlo,monospace;background:#f1f2f4;padding:1px 4px;border-radius:4px}
+pre{background:#f1f2f4;padding:10px 12px;border-radius:8px;overflow:auto;font:12px ui-monospace,Menlo,monospace}
+ul{margin:6px 0 6px 18px;padding:0}li{margin:3px 0}
+.muted{color:var(--muted)}
+</style>
+</head>
+<body><div class="wrap">
+<h1>Yashish Khurana — Strategy Portfolio</h1>
+<div class="sub">Strategies designed, run and post-mortemed with real capital at Lucidly Labs, 2024–2026 · rebuilt from scratch so the control logic and backtests can be read and rerun · <span class="muted">github.com/0xYashish · @bullishbeers</span></div>
+
+<div class="card">
+<p>This is a record of DeFi yield and structured-product work: leveraged stablecoin loops, delta-neutral funding carry, LP-and-hedge market making, supply-side lending clusters and coin-denominated carry vaults, executed from merkle-verified vaults on Ethereum, Base, Arbitrum and HyperEVM. The production code is Lucidly-owned, so every strategy here is a clean-room rewrite: the allocation and risk logic as pure Python, a replay or simulation on bundled data, and a static page generated from its <code>results.json</code>.</p>
+<p>The transferable parts are the cost-aware control design (hysteresis, deadbands, churn accounting), the position and hedge maths, and the habit of writing down what broke. It is not mid-frequency alpha research; that work is in the <code>quant-research</code> repo, in progress. Where a result rests on synthetic data the page says so, and no result here should be read as a return claim.</p>
+</div>
+
+<h2>What is common to all of them</h2>
+<div class="card">
+<ul>
+<li><b>Gate on the right metric.</b> Levered net <code>L·y − (L−1)·b</code>, not the raw spread; window means, not single prints; hysteresis on every exit.</li>
+<li><b>Split de-risking by cause and speed.</b> A rate problem de-levers and holds the yield asset; a principal problem (markdown, depeg) exits regardless of carry; LTV safety runs on the fastest loop.</li>
+<li><b>Same-block risk is bounded by sizing, not reaction.</b> Markdown-to-liquidation at 8x is 4.37%; a junior tranche is 3–4× levered on its underlying's depeg; a 0.8 × liq guard at 3x is a 5% rally; a −35% gap liquidates a 0.65-LTV ladder. Leverage is chosen against those numbers.</li>
+<li><b>Churn is the hidden cost.</b> Entry fees × leverage, round-trip taker fees and basis, band-rotation IL + slippage: in every backtest here the deadband or sustain parameter moves the result more than the signal does.</li>
+<li><b>Operations are part of the strategy.</b> Preflight validators against the live merkle root, dry-run-by-default CLIs, emergency exits, heartbeats and paging; the incidents that bit (a drained gas wallet, a decoder missing a selector, orphaned async requests, a redemption into a term trough) each became an invariant.</li>
+</ul>
+</div>
+
+<h2>Strategies</h2>
+<div class="card">
+<table>
+<tr><th>Strategy</th><th>Venue · chain</th><th>Data</th><th>What the replay shows</th></tr>
+<tr><td><a href="../strategies/leverage_loop/index.html">Leveraged stablecoin loop cluster</a></td><td>Morpho Blue · Ethereum</td><td>real: 93-day archive-RPC series, 3 markets</td><td>Allocator, three-state gate and sizing caps replayed day by day at 1x/3x/6x/8x with gas and entry fees: realised return falls monotonically with leverage (1x +0.9%, 8x −1.4% over 92 days). Net-gate sustain sensitivity, markdown-to-liquidation table, adversarial findings incl. a dead close branch.</td></tr>
+<tr><td><a href="../strategies/dn_cluster/index.html">Delta-neutral funding-carry cluster</a></td><td>Hyperliquid spot + perps · HyperEVM</td><td>real: 90 d Hyperliquid hourly funding + Binance/HL 1h spot (Jul–Oct 2026, candle opens); PT-sENA numbers quoted from the production page</td><td>Seed sizing, funding-weighted allocation, 1:1 hedge with part-fills, close rules — replayed as a postmortem of my own production rule. On real data the single-print funding rule paid ~45 bps of notional ~400 times to collect ~9%/yr funding: −34% in a quarter. Every rule change that cut round-trips helped in proportion, and the best row had no funding gate at all (+1.3%, 4 closes). The rule as shipped was unviable; the fix is to trade less. Gross opportunity in the window was ~7%/yr, so this is a postmortem, not an alpha result.</td></tr>
+<tr><td><a href="../strategies/lending_cluster/index.html">USDC lending cluster + junior-tranche postmortem</a></td><td>Morpho Blue, Royco Dawn · Ethereum</td><td>real: same 93-day series (supply APY = borrow × utilisation); postmortem from chain data</td><td>Mean-variance allocator with risk haircuts, eligibility gates, planner, withdrawal reserve. The honest finding: with hurdles near market APY and 0.40 caps, half the book sits idle; the quadratic term is inert at a 4-sample window. apyUSD junior tranche −34.1% on an 8.5% depeg: first-loss arithmetic, timing cost, guardrails.</td></tr>
+<tr><td><a href="../strategies/hedged_btc_mm/index.html">Hedged WBTC/WETH concentrated-liquidity MM</a></td><td>Uniswap v3 + Aave v3 · Arbitrum</td><td>real: 25.7 h, 9,940 Swap events from the pool (fees measured); 30-day GBM sweep synthetic with modelled fees</td><td>Engine demonstration: CL maths, edge-loss hedge optimiser, rotation rules, band-width sweep. On the real day the price never left a 250-tick band and measured fees were ~5× the modelled rate, enough to cover the hedge leg that day; on the synthetic sweeps the hedge lowers BTC-denominated equity vol but not the IL-driven drawdowns, and does not pay for itself.</td></tr>
+<tr><td><a href="../strategies/eurc_usdc_mm/index.html">EURC/USDC concentrated-liquidity MM</a></td><td>Aerodrome · Base</td><td>real: the public log's 5.2 h window, Swap events from the pool with its 76-pip fee (fees measured); 30-day OU path synthetic</td><td>Deposit in EURC-equivalent of the public log's USDC equity; P&amp;L versus the no-LP hold, decomposed term by term. Measured fees (23 EURC on the log's own window) are a third of the public backtest's accrual (75): the old log credited the position a larger share of each swap than the chain's per-swap liquidity supports — a correction to my earlier work. Tight bands on a 7%-vol pair rotate 70+ times a month; the synthetic sweep still uses an assumed fee rate.</td></tr>
+<tr><td><a href="../strategies/coin_carry_vault/index.html">BTC / ETH carry vaults — ladder arithmetic</a></td><td>Morpho Blue · Ethereum</td><td>real borrow-APR series; <b>synthetic</b> BTC paths</td><td>LTV ladder 0.60/0.65/0.70/0.74/liq 0.86, carry guard, delever route (idle → two-stage redeem → flash-deleverage), repair pipeline. A −35% one-day gap liquidates the ladder from LTV 0.65 (collateral seized, USDC credit kept, 5% incentive paid); the ladder is for drift, sizing is for gaps.</td></tr>
+</table>
+<p class="muted">Also in the repo: <a href="../strategies/vol_cone_forecast/index.html">a daily lognormal volatility-cone tool</a> (Deribit DVOL / realised vol → 1d and 30d bands) used to size margin reserves and liquidation guards.</p>
+</div>
+
+<h2>Repository</h2>
+<div class="card">
+<pre>common/        metrics.py · clmm.py (Uniswap v3 math) · cl_engine.py (shared LP simulator) · data.py · report.py (results.json → page, tone and window rules)
+strategies/&lt;name&gt;/strategy.py   pure allocation + risk logic      strategies/&lt;name&gt;/backtest.py   replay; writes results.json + index.html
+tests/         28 pytest cases: CL round-trips and IL vs closed form, metrics, net-gate hysteresis, spill-on-cap, liquidation formulas, solver bounds, ladder decisions, haircut conservation, exact engine decomposition
+data/          archive Morpho series (93 d, 3 markets), 1-min WBTC/WETH pool prices, EURC/USDC swap log, forecast sample, reference plots from github.com/lucidlylabs/simulations
+pip install -r requirements.txt · python build_all.py · pytest · fetchers: strategies/dn_cluster/fetch_data.py (HL funding + spot), strategies/cl_swaps/fetch_data.py (pool Swap logs → measured fees)</pre>
+<p>Rules applied to every page: a result is labelled <b>good</b> only against a stated benchmark on real data over ≥ 30 days; nothing under 30 days is annualised; synthetic inputs are named in the scenario note; Sharpe is not shown for windows under 100 samples or for stablecoin yield curves.</p>
+</div>
+</div></body></html>
