@@ -141,8 +141,6 @@ def build_results() -> dict:
             "the question is how tight a band to run against EUR/USD realised volatility and how often to rotate it. I built the backtester and published the tick-spacing comparison in `lucidlylabs/simulations`. "
             "The real window is five hours, so only the synthetic 30-day runs say anything about rotation costs, and they say it under an assumed fee rate.")},
         {"heading": "Rules", "body_md": "- One active band; rotate only when price leaves it (both oracle and pool tick outside).\n- Re-seed balanced for the new band; 2 bps min-out haircut on the balancing swap.\n- Fees accrue on in-range liquidity only; no leverage, no borrow."},
-        {"heading": "Reference plots — public backtest", "body_md": (
-            "![EURC/USDC 10 spacing](../../data/eurc_usdc_backtest_plot_10_spacing.png)\n\n![EURC/USDC 50 spacing](../../data/eurc_usdc_backtest_plot_50_spacing.png)")},
         {"heading": "Reproduce", "body_md": "```\npython -m strategies.eurc_usdc_mm.backtest\n```\nUses `common/cl_engine.py` with the hedge leg disabled."},
     ]
     return {"title": "EURC/USDC Concentrated-Liquidity MM — Aerodrome (Base)",
