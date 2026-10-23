@@ -113,7 +113,8 @@ def build_results() -> dict:
             "| price outside band (prod: oracle tick AND pool tick outside) | burn, swap surplus → deficit at oracle price with 10 bps min-out, re-seed next band with full LP equity, re-solve hedge |\n"
             "| LTV > 0.70 | repay debt to collateral × 0.60 × P |\n"
             "| in range, hedge debt drift ≥ 50% of target (explainer: 20%) | re-solve hedge |\n"
-            "| deposit / withdraw | split by current LP weight; scale L, collateral, debt pro rata |")},
+            "| deposit / withdraw | split by current LP weight; scale L, collateral, debt pro rata |\n\n"
+            "The band is 250 ticks and drift inside it re-solves the hedge rather than rotating the band, because every rotation pays slippage and realises IL.")},
         {"heading": "What the real day shows", "body_md": (
             "Over 25.7 hours ETH/BTC stayed inside a ±1.25% band, so there were no rotations and no realised IL. With fees measured from the pool's own Swap events the LP earned about five times what a 12%/yr fee assumption would have given (the pool was busy and a tight band's share of in-range liquidity is large), which covered the hedge leg's seeding haircut and borrow interest on the day; "
             "the hedged book finished ahead of holding 10 BTC. One day is one day: the result is reported as a window figure and not annualised.")},
@@ -121,9 +122,6 @@ def build_results() -> dict:
             "Each Swap event gives the amount in, the direction and the pool's in-range liquidity `L_pool` after the swap. The position's fee on that swap is `amount_in × fee_tier × L / (L_pool + L)` with `L` the position's own liquidity, "
             "and the fee tier is read from the pool per row (`fee()`), so a pool that changes its tier is charged correctly. This is the method in `common/cl_engine.py` (fee_mode = measured) and it replaced the fee-APR assumption wherever a swap log exists. "
             "Applying it to my earlier public EURC/USDC Aerodrome backtest (`lucidlylabs/simulations`) gave 23 EURC of fees on the log's own window against about 79 (51.0 EURC + 27.9 USDC) the old log accrued: that log had credited the position a larger share of each swap than the chain's per-swap liquidity supports. The correction is to the fee line — on the like-for-like window it moved equity by 0.6 bp — and is recorded in the README.")},
-        {"heading": "Reference plot — earlier public backtest", "body_md": (
-            "![Hedged WBTC/WETH backtest, 10 spacing](../../data/hedged_wbtc_weth_backtest_10_spacing.png)\n\n"
-            "From `github.com/lucidlylabs/simulations` (public): a 1.07-day run with five band rotations, where rotation slippage and IL exceeded fees — the reason the band on this page is 250 ticks and the hedge is re-solved rather than the band rotated on every drift. Panels: strategy AUM, price vs active range, fees vs IL + slippage, Aave LTV, net WETH exposure, fee wallet vs borrow cost, pool tick vs band.")},
         {"heading": "Reproduce", "body_md": "```\npython -m strategies.hedged_btc_mm.backtest\npytest tests/test_clmm.py\n```\n`common/clmm.py` = CL math (tested); `common/cl_engine.py` = the shared simulator; `strategy.py` = hedge optimiser and rules."},
     ]
     return {"title": "Hedged WBTC/WETH Concentrated-Liquidity MM — Uniswap v3 + Aave",

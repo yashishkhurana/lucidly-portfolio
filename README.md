@@ -63,7 +63,6 @@ Keys stay in environment variables; nothing in the repo reads a hard-coded RPC U
 - `data/algo_history.csv` — daily archive-RPC reads of three Morpho Blue markets (collateral exchange rate, borrow APR, supply/borrow), 2026-03-22 → 06-22. The loop page uses the siUSD/USDC rows; the lending page uses all three.
 - `data/swaps_wbtc_weth_arb.csv`, `data/swaps_eurc_usdc_base.csv` — per-swap Swap events (amounts, price, pool liquidity, historical fee) pulled by `strategies/cl_swaps/fetch_data.py`.
 - `data/wbtc_weth_arbitrum_1min.csv` — 1-minute WBTC/WETH 0.05% pool price, Arbitrum, 2026-03-10/11 (fallback path when no swap log is present).
-- `data/hedged_wbtc_weth_backtest_10_spacing.png` — reference plot from my public `lucidlylabs/simulations` repo.
 - `data/pendle_pt_sena.csv`, `data/hl_funding_ENA.csv`, `data/binance_ENAUSDT_1h.csv` — written by `strategies/dn_ena/fetch_data.py` (layout documented in its docstring; the layout is the contract).
 
 ## Layout
